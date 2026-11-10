@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Table2Latex</title>
+  <meta name="description" content="Design tables visually (headers, merged cells, alignment) and convert them to LaTeX in one click.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%232d5bd7'/%3E%3Cpath d='M7 10h18M7 16h18M7 22h18M13 7v18' stroke='white' stroke-width='2'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">T</span>
+      <h1>Table2Latex</h1>
+    </div>
+    <div class="topbar-actions">
+      <button id="btnUndo" title="Undo (Ctrl+Z)">↶ Undo</button>
+      <button id="btnRedo" title="Redo (Ctrl+Y)">↷ Redo</button>
+      <span class="sep"></span>
+      <button id="btnImport" title="Paste data from Excel, CSV or tab-separated text">Import data</button>
+      <button id="btnSaveJson" title="Save the table as a .json project file">Save project</button>
+      <label class="btn" title="Load a .json project file">Load project<input type="file" id="fileJson" accept=".json,application/json" hidden></label>
+      <button id="btnHelp">Help</button>
+    </div>
+  </header>
+
+  <main class="split" id="split">
+    <!-- ============ LEFT: TABLE DESIGNER ============ -->
+    <section class="pane pane-left" id="paneLeft">
+      <div class="toolbar">
+        <div class="group">
+          <span class="group-label">New</span>
+          <input type="number" id="newRows" min="1" max="100" value="4" aria-label="Rows">
+          <span class="x">×</span>
+          <input type="number" id="newCols" min="1" max="40" value="4" aria-label="Columns">
+          <button id="btnNew" title="Create an empty table (replaces the current one)">Create</button>
+        </div>
+        <div class="group">
+          <span class="group-label">Row</span>
+          <button id="btnRowAbove" title="Insert row above">+ Above</button>
+          <button id="btnRowBelow" title="Insert row below">+ Below</button>
+          <button id="btnRowDel" class="danger" title="Delete selected row(s)">Delete</button>
+        </div>
+        <div class="group">
+          <span class="group-label">Column</span>
+          <button id="btnColLeft" title="Insert column left">+ Left</button>
+          <button id="btnColRight" title="Insert column right">+ Right</button>
+          <button id="btnColDel" class="danger" title="Delete selected column(s)">Delete</button>
+        </div>
+        <div class="group">
+          <span class="group-label">Cells</span>
+          <button id="btnMerge" class="primary-soft" title="Merge selected cells (Ctrl+M)">Merge</button>
+          <button id="btnUnmerge" title="Split merged cell">Unmerge</button>
+          <button id="btnClear" title="Clear contents of selected cells (Delete)">Clear</button>
+        </div>
+        <div class="group">
+          <span class="group-label">Format</span>
+          <button id="btnBold" class="icon" title="Bold (Ctrl+B)"><b>B</b></button>
+          <button id="btnItalic" class="icon" title="Italic (Ctrl+I)"><i>I</i></button>
+          <button id="btnAlignL" class="icon" title="Align left">⟸</button>
+          <button id="btnAlignC" class="icon" title="Align center">⟺</button>
+          <button id="btnAlignR" class="icon" title="Align right">⟹</button>
+          <button id="btnAlignReset" title="Use the column's alignment">Reset</button>
+        </div>
+        <div class="group">
+          <span class="group-label">Header rows</span>
+          <input type="number" id="headerRows" min="0" value="1" aria-label="Number of header rows">
+        </div>
+      </div>
+
+      <div class="hint" id="selInfo">Click a cell to edit. Drag or Shift+click to select several cells, then merge.</div>
+
+      <div class="table-scroll" id="tableScroll">
+        <table class="editor" id="editor"></table>
+      </div>
+    </section>
+
+    <!-- ============ DIVIDER ============ -->
+    <div class="divider" id="divider" role="separator" aria-orientation="vertical" tabindex="0" title="Drag to resize">
+      <button id="btnConvert" class="convert" title="Convert table to LaTeX (Ctrl+Enter)">
+        <span>Convert</span><span class="arrow">→</span>
+      </button>
+    </div>
+
+    <!-- ============ RIGHT: LATEX OUTPUT ============ -->
+    <section class="pane pane-right" id="paneRight">
+      <div class="options">
+        <div class="opt-row">
+          <label>Style
+            <select id="optStyle">
+              <option value="booktabs">booktabs (publication)</option>
+              <option value="grid">Full grid (all lines)</option>
+              <option value="hlines">Horizontal lines only</option>
+              <option value="plain">No lines</option>
+            </select>
+          </label>
+          <label>Float
+            <input type="text" id="optFloat" value="htbp" size="5">
+          </label>
+          <label>Font size
+            <select id="optSize">
+              <option value="">default</option>
+              <option value="\footnotesize">\footnotesize</option>
+              <option value="\small">\small</option>
+              <option value="\scriptsize">\scriptsize</option>
+              <option value="\tiny">\tiny</option>
+              <option value="\large">\large</option>
+            </select>
+          </label>
+        </div>
+        <div class="opt-row">
+          <label class="grow">Caption
+            <input type="text" id="optCaption" placeholder="Table caption">
+          </label>
+          <label>Label
+            <input type="text" id="optLabel" placeholder="tab:results" size="12">
+          </label>
+          <label>Caption
+            <select id="optCapPos">
+              <option value="top">above</option>
+              <option value="bottom">below</option>
+            </select>
+          </label>
+        </div>
+        <div class="opt-row checks">
+          <label><input type="checkbox" id="optEnv" checked> table environment</label>
+          <label><input type="checkbox" id="optCenter" checked> \centering</label>
+          <label><input type="checkbox" id="optResize"> fit to \textwidth</label>
+          <label><input type="checkbox" id="optBoldHeader" checked> bold header</label>
+          <label><input type="checkbox" id="optEscape" checked title="Escape & % _ # etc. Text inside $...$ is kept as math.">escape special chars</label>
+          <label><input type="checkbox" id="optCmid" checked> \cmidrule under grouped headers</label>
+          <label><input type="checkbox" id="optAlignAmp" checked> align &amp; in code</label>
+          <label><input type="checkbox" id="optLive" checked> live update</label>
+        </div>
+      </div>
+
+      <div class="output-head">
+        <span id="pkgInfo" class="pkg"></span>
+        <div class="output-actions">
+          <button id="btnCopy" class="primary">Copy LaTeX</button>
+          <button id="btnDownload">Download .tex</button>
+        </div>
+      </div>
+      <pre class="output" id="output" tabindex="0"><code id="outputCode"></code></pre>
+    </section>
+  </main>
+
+  <!-- Import dialog -->
+  <dialog id="dlgImport">
+    <form method="dialog" class="dlg">
+      <h2>Import data</h2>
+      <p>Paste cells copied from Excel, Google Sheets or a CSV / tab-separated file. The current table is replaced.</p>
+      <textarea id="importText" rows="10" placeholder="Specimen&#9;f1 (Hz)&#9;f2 (Hz)&#10;A&#9;120.5&#9;241.0"></textarea>
+      <div class="dlg-row">
+        <label class="btn">Choose file…<input type="file" id="fileCsv" accept=".csv,.tsv,.txt" hidden></label>
+        <label><input type="checkbox" id="importHeader" checked> first row is header</label>
+      </div>
+      <div class="dlg-actions">
+        <button value="cancel">Cancel</button>
+        <button id="btnDoImport" value="ok" class="primary">Import</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Help dialog -->
+  <dialog id="dlgHelp">
+    <form method="dialog" class="dlg">
+      <h2>How to use</h2>
+      <ul class="help">
+        <li><b>Edit</b>: click a cell and type. <kbd>Tab</kbd> / <kbd>Shift+Tab</kbd> moves sideways, <kbd>Enter</kbd> moves down. Pressing <kbd>Tab</kbd> in the last cell adds a row.</li>
+        <li><b>Select</b>: drag across cells, or <kbd>Shift</kbd>+click. Click a row number or column letter to select the whole row or column.</li>
+        <li><b>Merge</b>: select a block, then press <b>Merge</b> (<kbd>Ctrl+M</kbd>). Horizontal merges become <code>\multicolumn</code> and vertical merges become <code>\multirow</code>.</li>
+        <li><b>Column alignment</b>: type in the small box above each column: <code>l</code>, <code>c</code>, <code>r</code>, <code>p{3cm}</code>, <code>S</code> (siunitx), etc.</li>
+        <li><b>Header rows</b>: the first <i>n</i> rows are the header. booktabs puts <code>\midrule</code> after them.</li>
+        <li><b>Math</b>: write <code>$\alpha$</code> or <code>$10^{-3}$</code>. Text inside <code>$…$</code> is never escaped.</li>
+        <li><b>Paste from Excel</b>: paste a block of copied cells into any cell, and it fills the grid from there.</li>
+        <li><b>Convert</b>: the LaTeX updates live. With live update off, press <b>Convert</b> (<kbd>Ctrl+Enter</kbd>).</li>
+        <li>Your work is saved in this browser automatically.</li>
+      </ul>
+      <div class="dlg-actions">
+        <button value="ok" class="primary">Got it</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="js/latex.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
