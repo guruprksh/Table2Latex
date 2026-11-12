@@ -111,7 +111,7 @@
         </div>
         <div class="opt-row">
           <label class="grow">Caption
-            <input type="text" id="optCaption" placeholder="Table caption">
+            <input type="text" id="optCaption" placeholder="LaTeX allowed, e.g. Material properties \cite{key}">
           </label>
           <label>Label
             <input type="text" id="optLabel" placeholder="tab:results" size="12">
@@ -123,10 +123,43 @@
             </select>
           </label>
         </div>
+        <div class="opt-row">
+          <label>Width
+            <select id="optWidthMode" title="How the table relates to the page width">
+              <option value="natural">natural (fit content)</option>
+              <option value="stretch">stretch spacing to width (tabular*)</option>
+              <option value="tabularx">equal flexible columns (tabularx)</option>
+              <option value="shrink">shrink only if too wide (adjustbox)</option>
+              <option value="scale">scale to width (resizebox)</option>
+            </select>
+          </label>
+          <label>to
+            <input type="text" id="optWidth" value="\textwidth" size="12" list="widthPresets" spellcheck="false" title="Target width, e.g. \textwidth, 0.9\textwidth, \linewidth, 16cm">
+          </label>
+          <datalist id="widthPresets">
+            <option value="\textwidth"></option>
+            <option value="0.95\textwidth"></option>
+            <option value="0.9\textwidth"></option>
+            <option value="0.8\textwidth"></option>
+            <option value="\linewidth"></option>
+            <option value="\columnwidth"></option>
+          </datalist>
+          <label><input type="checkbox" id="optSpan"> table* (span both columns)</label>
+        </div>
+        <div class="opt-row">
+          <label title="Horizontal padding on each side of a column (LaTeX default 6pt)">\tabcolsep
+            <input type="text" id="optColSep" placeholder="6pt" size="5" spellcheck="false">
+          </label>
+          <label title="Row height factor (LaTeX default 1)">\arraystretch
+            <input type="text" id="optStretch" placeholder="1.0" size="4" spellcheck="false">
+          </label>
+          <label title="Vertical space at the top of the float">\vspace
+            <input type="text" id="optVspace" placeholder="0.2cm" size="6" spellcheck="false">
+          </label>
+        </div>
         <div class="opt-row checks">
           <label><input type="checkbox" id="optEnv" checked> table environment</label>
           <label><input type="checkbox" id="optCenter" checked> \centering</label>
-          <label><input type="checkbox" id="optResize"> fit to \textwidth</label>
           <label><input type="checkbox" id="optBoldHeader" checked> bold header</label>
           <label><input type="checkbox" id="optEscape" checked title="Escape & % _ # etc. Text inside $...$ is kept as math.">escape special chars</label>
           <label><input type="checkbox" id="optCmid" checked> \cmidrule under grouped headers</label>

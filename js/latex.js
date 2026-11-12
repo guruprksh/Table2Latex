@@ -67,7 +67,12 @@
         capPos: 'top',
         env: true,
         center: true,
-        resize: false,
+        widthMode: 'natural', // natural | stretch | tabularx | shrink | scale
+        width: '\\textwidth',
+        colSep: '',
+        stretch: '',
+        vspace: '',
+        span: false,
         boldHeader: true,
         escape: true,
         cmidrule: true,
@@ -232,26 +237,62 @@
     const out = [];
     const capLines = [];
     if (o.env) {
-      if (o.caption) capLines.push(ind + '\\caption{' + (o.escape ? escapeText(o.caption) : o.caption) + '}');
+      // caption is raw LaTeX so \cite{...}, $...$ etc. work
+      if (o.caption) capLines.push(ind + '\\caption{' + o.caption + '}');
       if (o.label) capLines.push(ind + '\\label{' + o.label + '}');
     }
 
-    if (o.env) out.push('\\begin{table}' + (o.float ? '[' + o.float + ']' : ''));
+    // Width handling
+    const W = (o.width || '').trim() || '\\textwidth';
+    let tabEnv = 'tabular';
+    let tabArgs = '{' + tabSpec + '}';
+    let wrapOpen = null;
+    let wrapClose = null;
+    if (o.widthMode === 'stretch') {
+      // natural column widths, extra space distributed between columns
+      tabEnv = 'tabular*';
+      tabArgs = '{' + W + '}{@{\\extracolsep{\\fill}}' + tabSpec + '}';
+    } else if (o.widthMode === 'tabularx') {
+      // plain l/c/r columns become X columns that share the width (unless the user already placed X)
+      pkgs.add('tabularx');
+      tabEnv = 'tabularx';
+      const xSpecs = specs.some((s) => /X/.test(s))
+        ? specs
+        : specs.map((s) => {
+            if (s === 'l') return '>{\\raggedright\\arraybackslash}X';
+            if (s === 'c') return '>{\\centering\\arraybackslash}X';
+            if (s === 'r') return '>{\\raggedleft\\arraybackslash}X';
+            return s;
+          });
+      if (xSpecs.some((s) => s.startsWith('>'))) pkgs.add('array');
+      tabArgs = '{' + W + '}{' + (grid ? '|' + xSpecs.join('|') + '|' : xSpecs.join('')) + '}';
+    } else if (o.widthMode === 'shrink') {
+      pkgs.add('adjustbox');
+      wrapOpen = '\\begin{adjustbox}{max width=' + W + '}';
+      wrapClose = '\\end{adjustbox}';
+    } else if (o.widthMode === 'scale') {
+      pkgs.add('graphicx');
+      wrapOpen = '\\resizebox{' + W + '}{!}{%';
+      wrapClose = '}';
+    }
+
+    const envName = o.span ? 'table*' : 'table';
+    if (o.env) out.push('\\begin{' + envName + '}' + (o.float ? '[' + o.float + ']' : ''));
+    if (o.env && o.vspace) out.push(ind + '\\vspace{' + o.vspace + '}');
     if (o.env && o.center) out.push(ind + '\\centering');
     if (o.env && o.capPos === 'top') out.push(...capLines);
     if (o.size) out.push(ind + o.size);
-    if (o.resize) {
-      pkgs.add('graphicx');
-      out.push(ind + '\\resizebox{\\textwidth}{!}{%');
-    }
-    out.push(ind + '\\begin{tabular}{' + tabSpec + '}');
+    if (o.colSep) out.push(ind + '\\setlength{\\tabcolsep}{' + o.colSep + '}');
+    if (o.stretch) out.push(ind + '\\renewcommand{\\arraystretch}{' + o.stretch + '}');
+    if (wrapOpen) out.push(ind + wrapOpen);
+    out.push(ind + '\\begin{' + tabEnv + '}' + tabArgs);
     out.push(...body);
-    out.push(ind + '\\end{tabular}' + (o.resize ? '%' : ''));
-    if (o.resize) out.push(ind + '}');
+    out.push(ind + '\\end{' + tabEnv + '}' + (o.widthMode === 'scale' ? '%' : ''));
+    if (wrapClose) out.push(ind + wrapClose);
     if (o.env && o.capPos === 'bottom') out.push(...capLines);
-    if (o.env) out.push('\\end{table}');
+    if (o.env) out.push('\\end{' + envName + '}');
 
-    const order = ['booktabs', 'multirow', 'makecell', 'siunitx', 'array', 'graphicx'];
+    const order = ['booktabs', 'multirow', 'makecell', 'siunitx', 'array', 'tabularx', 'adjustbox', 'graphicx'];
     const packages = order.filter((p) => pkgs.has(p));
     let code = out.join('\n');
     if (packages.length) {

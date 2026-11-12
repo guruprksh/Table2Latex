@@ -25,7 +25,14 @@ It runs entirely in the browser, with no build step, no dependencies and no serv
 - **Correct rules around multirow cells**: lines between rows use `\cline` or `\cmidrule` segments, so they never cut through a `\multirow` cell.
 - **Escaping**: `& % _ # { } ~ ^ \` are escaped automatically. Text inside `$…$` is left alone as math.
 - **Multi-line cells**: press Shift+Enter inside a cell. The cell is wrapped in `\makecell`.
-- **Table wrapper**: a `table` environment with caption (above or below), label, float placement, font size, `\centering` and an optional `\resizebox{\textwidth}`.
+- **Table wrapper**: a `table` environment (or `table*` to span both columns) with caption (above or below), label, float placement, font size and `\centering`. The caption is raw LaTeX, so `\cite{…}` and `$…$` work there.
+- **Page width**: pick how the table relates to a target width such as `\textwidth`, `0.9\textwidth`, `\linewidth` or `16cm`.
+  - *natural*: plain `tabular`, as wide as its content.
+  - *stretch spacing*: `tabular*` with `\extracolsep{\fill}`. Columns keep their size and the gaps grow to fill the width.
+  - *equal flexible columns*: `tabularx`. Plain `l`/`c`/`r` columns become X columns that share the width.
+  - *shrink only if too wide*: `adjustbox` with `max width`.
+  - *scale to width*: `\resizebox`, which scales the font too.
+- **Spacing**: set `\tabcolsep`, `\arraystretch`, and a `\vspace` at the top of the float.
 - **Import**: paste cells straight from Excel or Google Sheets, or load a CSV/TSV file.
 - **Copy and save**: copy to the clipboard, download a `.tex` file, or save and load the project as `.json`.
 - **Autosave and undo**: your work is saved in the browser. Undo and redo are available.

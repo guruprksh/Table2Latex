@@ -96,6 +96,7 @@ input[type="text"], input[type="number"], select, textarea {
   padding: 4px 6px;
 }
 input[type="number"] { width: 54px; }
+input:disabled { opacity: 0.45; cursor: not-allowed; }
 input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
 
 /* ---------- Top bar ---------- */

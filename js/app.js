@@ -231,7 +231,8 @@
 
   const OPT_IDS = {
     style: 'optStyle', float: 'optFloat', size: 'optSize', caption: 'optCaption', label: 'optLabel',
-    capPos: 'optCapPos', env: 'optEnv', center: 'optCenter', resize: 'optResize', boldHeader: 'optBoldHeader',
+    capPos: 'optCapPos', env: 'optEnv', center: 'optCenter', boldHeader: 'optBoldHeader',
+    widthMode: 'optWidthMode', width: 'optWidth', span: 'optSpan', colSep: 'optColSep', stretch: 'optStretch', vspace: 'optVspace',
     escape: 'optEscape', cmidrule: 'optCmid', alignAmp: 'optAlignAmp', live: 'optLive',
   };
 
@@ -244,7 +245,13 @@
     return o;
   }
 
+  function syncWidthUI() {
+    $('optWidth').disabled = $('optWidthMode').value === 'natural';
+  }
+
   function writeOpts(o) {
+    // older saves had a single "fit to \textwidth" checkbox
+    if (o.resize && !('widthMode' in o)) o = Object.assign({}, o, { widthMode: 'scale', width: '\\textwidth' });
     for (const [k, id] of Object.entries(OPT_IDS)) {
       if (!(k in o)) continue;
       const el = $(id);
@@ -885,6 +892,7 @@
     const el = $(id);
     el.addEventListener(el.type === 'checkbox' || el.tagName === 'SELECT' ? 'change' : 'input', () => {
       if (id === 'optBoldHeader') render();
+      if (id === 'optWidthMode') syncWidthUI();
       if (id === 'optLive' && el.checked) convert();
       changed();
     });
@@ -945,6 +953,7 @@
   // ---------------------------------------------------------------- boot
 
   load();
+  syncWidthUI();
   render();
   convert();
 })();
