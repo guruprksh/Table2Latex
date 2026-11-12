@@ -56,6 +56,77 @@
     return m ? m[1] : 'c';
   }
 
+  // Header must include every row reached by a merge that starts inside it.
+  function effectiveHeaderRows(model) {
+    let H = Math.min(Math.max(model.headerRows | 0, 0), model.rows);
+    let grown = true;
+    while (grown) {
+      grown = false;
+      for (const m of model.merges) {
+        if (m.r < H && m.r + m.rs > H) {
+          H = m.r + m.rs;
+          grown = true;
+        }
+      }
+    }
+    return H;
+  }
+
+  // Rough printed length of cell text in characters (markup and math syntax removed).
+  function visibleText(t) {
+    return (t || '')
+      .replace(/\$([^$]*)\$/g, (_, s) => s.replace(/\\[a-zA-Z]+/g, '').replace(/[\s{}^_]/g, ''))
+      .replace(/\\[a-zA-Z]+\*?/g, '')
+      .replace(/[{}\\]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  // tabularx column weights: relative width each plain l/c/r column needs so that
+  // header text can wrap (up to ~3 lines) and body text stays on one line.
+  // Returns an array of weights (null for non-X columns) that sum to the X column count.
+  function xWeights(model, specs, H, owner) {
+    const C = model.cols;
+    const isX = specs.map((s) => /^[lcr]$/.test(s));
+    const nX = isX.filter(Boolean).length;
+    if (!nX) return null;
+    const MIN = 3;
+    const GAP = 2; // inter-column padding, in characters
+    const need = new Array(C).fill(MIN);
+    const measure = (r, c, lines) => {
+      const text = visibleText(model.cells[r][c].t);
+      if (!text) return 0;
+      const longest = Math.max(...text.split(/\s+|(?<=-)/).map((w) => w.length));
+      return Math.max(longest, Math.ceil(text.length / lines));
+    };
+    const spans = [];
+    for (let r = 0; r < model.rows; r++) {
+      for (let c = 0; c < C; c++) {
+        const m = owner[r][c];
+        if (m && (m.r !== r || m.c !== c)) continue;
+        const cs = m ? m.cs : 1;
+        const lines = r < H ? (m && m.rs > 1 ? 2 * m.rs : 3) : 1;
+        if (cs === 1) need[c] = Math.max(need[c], measure(r, c, lines));
+        else spans.push({ c, cs, req: measure(r, c, r < H ? 2 : 1) });
+      }
+    }
+    // widen spanned columns when a grouped header needs more room than they give
+    spans.sort((a, b) => a.cs - b.cs);
+    for (const s of spans) {
+      let have = GAP * (s.cs - 1);
+      for (let k = s.c; k < s.c + s.cs; k++) have += need[k];
+      if (s.req > have) for (let k = s.c; k < s.c + s.cs; k++) need[k] += (s.req - have) / s.cs;
+    }
+    const xs = need.filter((_, c) => isX[c]);
+    const mean = xs.reduce((a, b) => a + b, 0) / nX;
+    const w = need.map((n, c) => (isX[c] ? Math.round((n / mean) * 100) / 100 : null));
+    // make the rounded weights sum exactly to nX
+    const sum = w.reduce((a, b) => a + (b || 0), 0);
+    const big = w.indexOf(Math.max(...w.filter((x) => x !== null)));
+    w[big] = Math.round((w[big] + nX - sum) * 100) / 100;
+    return w;
+  }
+
   function generate(model, opts) {
     const o = Object.assign(
       {
@@ -83,7 +154,7 @@
 
     const R = model.rows;
     const C = model.cols;
-    const H = Math.min(Math.max(model.headerRows | 0, 0), R);
+    const H = effectiveHeaderRows(model);
     const grid = o.style === 'grid';
     const owner = buildOwner(model);
     const pkgs = new Set();
@@ -94,6 +165,28 @@
     const tabSpec = grid ? '|' + specs.join('|') + '|' : specs.join('');
     if (specs.some((s) => /^S/.test(s))) pkgs.add('siunitx');
     if (specs.some((s) => /^[mb]\{/.test(s))) pkgs.add('array');
+
+    // tabularx: weighted X columns (skipped if the user already wrote X columns)
+    const xw = o.widthMode === 'tabularx' && !specs.some((s) => /X/.test(s)) ? xWeights(model, specs, H, owner) : null;
+    const ALIGN_CMD = { l: '\\raggedright', c: '\\centering', r: '\\raggedleft' };
+    const allX = (c, cs) => {
+      if (!xw) return false;
+      for (let k = c; k < c + cs; k++) if (xw[k] === null) return false;
+      return true;
+    };
+    const xSpec = (c, cs, a) => {
+      let w = 0;
+      for (let k = c; k < c + cs; k++) w += xw[k];
+      w = Math.round(w * 100) / 100;
+      let hs = '';
+      if (cs > 1) {
+        hs = '\\hsize=\\dimexpr' + w + '\\hsize+' + 2 * (cs - 1) + '\\tabcolsep' +
+          (grid ? '+' + (cs - 1) + '\\arrayrulewidth' : '') + '\\relax';
+      } else if (w !== 1) {
+        hs = '\\hsize=' + w + '\\hsize';
+      }
+      return '>{' + hs + ALIGN_CMD[a] + '\\arraybackslash}X';
+    };
 
     const fmt = (r, c) => {
       const cell = model.cells[r][c];
@@ -113,8 +206,9 @@
     };
 
     const mcSpec = (c, cs, a) => {
-      if (!grid) return a;
-      return (c === 0 ? '|' : '') + a + '|';
+      const s = allX(c, cs) ? xSpec(c, cs, a) : a;
+      if (!grid) return s;
+      return (c === 0 ? '|' : '') + s + '|';
     };
 
     // Build row parts: [{ text, c, cs }]
@@ -133,7 +227,10 @@
             text = fmt(m.r, m.c);
             if (m.rs > 1) {
               pkgs.add('multirow');
-              text = '\\multirow{' + m.rs + '}{*}{' + text + '}';
+              // inside X columns the multirow text wraps to the column width
+              text = allX(m.c, cs)
+                ? '\\multirow{' + m.rs + '}{\\linewidth}{' + (text ? ALIGN_CMD[a] + ' ' + text : '') + '}'
+                : '\\multirow{' + m.rs + '}{*}{' + text + '}';
             }
           }
           if (cs > 1 || (m.r === r && anchorCell.a && anchorCell.a !== baseAlign(specs[m.c]))) {
@@ -172,8 +269,10 @@
         }
       }
     }
+    // aligning very wide tables makes the code harder to read, not easier
+    const align = o.alignAmp && widths.reduce((a, b) => a + b, 0) + 3 * (C - 1) <= 220;
     const pad = (p) => {
-      if (!o.alignAmp) return p.text;
+      if (!align) return p.text;
       let w = 3 * (p.cs - 1);
       for (let k = p.c; k < p.c + p.cs; k++) w += widths[k];
       return p.text.padEnd(w, ' ');
@@ -253,17 +352,10 @@
       tabEnv = 'tabular*';
       tabArgs = '{' + W + '}{@{\\extracolsep{\\fill}}' + tabSpec + '}';
     } else if (o.widthMode === 'tabularx') {
-      // plain l/c/r columns become X columns that share the width (unless the user already placed X)
+      // plain l/c/r columns become weighted X columns that share the width (unless the user already placed X)
       pkgs.add('tabularx');
       tabEnv = 'tabularx';
-      const xSpecs = specs.some((s) => /X/.test(s))
-        ? specs
-        : specs.map((s) => {
-            if (s === 'l') return '>{\\raggedright\\arraybackslash}X';
-            if (s === 'c') return '>{\\centering\\arraybackslash}X';
-            if (s === 'r') return '>{\\raggedleft\\arraybackslash}X';
-            return s;
-          });
+      const xSpecs = xw ? specs.map((s, c) => (xw[c] === null ? s : xSpec(c, 1, s))) : specs;
       if (xSpecs.some((s) => s.startsWith('>'))) pkgs.add('array');
       tabArgs = '{' + W + '}{' + (grid ? '|' + xSpecs.join('|') + '|' : xSpecs.join('')) + '}';
     } else if (o.widthMode === 'shrink') {
@@ -301,5 +393,5 @@
     return { code, packages };
   }
 
-  global.Table2Latex = { generate, escapeText };
+  global.Table2Latex = { generate, escapeText, effectiveHeaderRows };
 })(typeof window !== 'undefined' ? window : globalThis);

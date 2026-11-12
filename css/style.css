@@ -219,7 +219,8 @@ table.editor td.cell {
   min-width: 80px;
   max-width: 320px;
   white-space: pre-wrap;
-  word-break: break-word;
+  overflow-wrap: normal;
+  hyphens: auto;
   outline: none;
   cursor: text;
   vertical-align: middle;

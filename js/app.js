@@ -192,11 +192,21 @@
     }
   }
 
+  // A merge that starts in the header and reaches below it extends the header.
+  function syncHeaderRows() {
+    const H = Table2Latex.effectiveHeaderRows(model);
+    if (H !== model.headerRows) {
+      model.headerRows = H;
+      toast('Header extended to ' + H + ' rows to include merged header cells');
+    }
+  }
+
   // Run a structural change with undo support, then re-render.
   function commit(fn) {
     flushEdit();
     const before = snap();
     fn();
+    syncHeaderRows();
     if (snap() === before) return;
     undoStack.push(before);
     if (undoStack.length > 200) undoStack.shift();
@@ -277,7 +287,10 @@
       const raw = localStorage.getItem(STORE_KEY);
       if (!raw) return;
       const data = JSON.parse(raw);
-      if (validModel(data.model)) model = data.model;
+      if (validModel(data.model)) {
+        model = data.model;
+        model.headerRows = Table2Latex.effectiveHeaderRows(model);
+      }
       if (data.opts) writeOpts(data.opts);
     } catch (e) { /* ignore corrupt storage */ }
   }
